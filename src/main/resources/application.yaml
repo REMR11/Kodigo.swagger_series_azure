@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: api_azure
+# Configuracion para keyVault de azure
+  cloud:
+    azure:
+      keyvault:
+        secret:
+          property-source:
+            - endpoint: ${AZURE_KEY_VAULT_URL}
+datasource:
+  url: ${AZURE_DATABASE_URL}
+  username: ${AZURE_DATABASE_USER_NAME}
+  password: ${AZURE_DATABASE_USER_PASSWORD}
+  driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+jpa:
+  hibernate:
+    ddl-auto: create-drop
+  show-sql: true
+  properties:
+    hibernate:
+      dialect: org.hibernate.dialect.SQLServerDialect
+      format-sql: true
+  defer-datasource-initialization: true
+
+# Aun contemplo si agregare datos quemados desde aqui
+# Esta configuracion es para cargar datos inciales desde un .sql
+#sql:
+#  init:
+#    mode: always
+#    data-locations: classpath:data.sql
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Configuracion de loggin
+logging:
+  level:
+    org.springframewok.web: INFO
+    org.kodigo.swagger_api_azure: DEBUG
+  pattern:
+    console: "%d{yyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
