@@ -1,3 +1,9 @@
+/**
+ * Entidad Personaje - Representa un personaje de una serie
+ * Aplica principios SOLID:
+ * - SRP: Solo responsable de representar los datos de un personaje
+ * - DIP: Depende de abstracciones (JPA annotations) no de concreciones
+ */
 package org.kodigo.swagger_api_azure.entity;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;

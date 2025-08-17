@@ -1,3 +1,7 @@
+/**
+ * DTO simplificado para crear Personajes sin incluir todos los datos de la Serie
+ * Aplica principio de Interface Segregation (ISP) - interfaces específicas
+ */
 package org.kodigo.swagger_api_azure.dto;
 
 import jakarta.validation.constraints.NotBlank;

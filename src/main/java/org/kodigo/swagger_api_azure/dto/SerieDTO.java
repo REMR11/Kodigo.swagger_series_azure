@@ -1,3 +1,7 @@
+/**
+ * DTO para Serie - Aplica principio de Responsabilidad Única (SRP)
+ * Solo responsable de transportar datos de Serie entre capas
+ */
 package org.kodigo.swagger_api_azure.dto;
 
 import jakarta.validation.constraints.NotBlank;

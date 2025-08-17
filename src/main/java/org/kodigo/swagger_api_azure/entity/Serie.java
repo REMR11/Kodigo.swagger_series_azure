@@ -1,3 +1,9 @@
+/**
+ * Entidad Serie - Representa una serie de televisión
+ * Aplica principios SOLID:
+ * - SRP: Solo responsable de representar los datos de una serie
+ * - OCP: Extensible sin modificar el código existente
+ */
 package org.kodigo.swagger_api_azure.entity;
 
 import com.fasterxml.jackson.annotation.JsonManagedReference;

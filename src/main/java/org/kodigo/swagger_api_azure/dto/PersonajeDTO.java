@@ -1,3 +1,7 @@
+/**
+ * DTO para Personaje - Aplica principio de Responsabilidad Única (SRP)
+ * Solo responsable de transportar datos de Personaje entre capas
+ */
 package org.kodigo.swagger_api_azure.dto;
 
 import jakarta.validation.constraints.NotBlank;
