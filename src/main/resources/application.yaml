@@ -8,20 +8,23 @@ spring:
         secret:
           property-source:
             - endpoint: ${AZURE_KEY_VAULT_URL}
-datasource:
-  url: ${AZURE_DATABASE_URL}
-  username: ${AZURE_DATABASE_USER_NAME}
-  password: ${AZURE_DATABASE_USER_PASSWORD}
-  driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-jpa:
-  hibernate:
-    ddl-auto: create-drop
-  show-sql: true
-  properties:
+  datasource:
+    url: ${AZURE_DATABASE_URL}
+    username: ${AZURE_DATABASE_USER_NAME}
+    password: ${AZURE_DATABASE_USER_PASSWORD}
+    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  jpa:
     hibernate:
-      dialect: org.hibernate.dialect.SQLServerDialect
-      format-sql: true
-  defer-datasource-initialization: true
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.SQLServerDialect
+        format-sql: true
+    defer-datasource-initialization: true
+#--------------------------------------------------------------------------
+# hace falta el Id de keyVault, no es indispesable, pero es un recordatorio
+#--------------------------------------------------------------------------
 
 # Aun contemplo si agregare datos quemados desde aqui
 # Esta configuracion es para cargar datos inciales desde un .sql
