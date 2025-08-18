@@ -11,18 +11,25 @@ import org.mapstruct.Mapping;
 import org.mapstruct.factory.Mappers;
 
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = { PersonajeMapper.class })
 public interface SerieMapper {
     SerieMapper INSTANCE = Mappers.getMapper(SerieMapper.class);
 
     /**
      * Convierte una entidad Serie a su DTO correspondiente.
-     * La lista de personajes se ignora para evitar referencias circulares.
+     * Incluye la lista de personajes.
      * @param serie la entidad Serie.
      * @return el DTO de la Serie.
      */
-    @Mapping(target = "personajes", ignore = true)
     SerieDTO toDto(Serie serie);
+
+    /**
+     * Convierte una entidad Serie a su DTO correspondiente sin personajes.
+     * @param serie la entidad Serie.
+     * @return el DTO de la Serie sin personajes.
+     */
+    @Mapping(target = "personajes", ignore = true)
+    SerieDTO toDtoWithoutPersonajes(Serie serie);
 
     /**
      * Convierte un DTO de Serie a su entidad correspondiente.

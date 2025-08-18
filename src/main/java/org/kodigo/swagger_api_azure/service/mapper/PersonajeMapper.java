@@ -18,8 +18,8 @@ public interface PersonajeMapper {
      * @param personaje la entidad Personaje.
      * @return el DTO del Personaje.
      */
-    @Mapping(source = "serie.id", target = "serieId")
-    @Mapping(source = "serie.titulo", target = "serieTitulo")
+    @Mapping(target = "serieId", source = "serie.id")
+    @Mapping(target = "serieTitulo", source = "serie.titulo")
     PersonajeDTO toDto(Personaje personaje);
 
     /**
@@ -28,7 +28,7 @@ public interface PersonajeMapper {
      * @param personajeDto el DTO del Personaje.
      * @return la entidad Personaje.
      */
-    @Mapping(target = "serie", ignore = true)
+    @Mapping(target = "serie", ignore = true) // la relación se gestiona en el servicio
     Personaje toEntity(PersonajeDTO personajeDto);
 
     /**
