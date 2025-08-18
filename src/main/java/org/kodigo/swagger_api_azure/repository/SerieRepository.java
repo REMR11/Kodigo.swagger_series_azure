@@ -13,7 +13,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,21 +34,6 @@ public interface SerieRepository extends JpaRepository<Serie, Long> {
     List<Serie> findByTituloContainingIgnoreCase(String titulo);
 
     /**
-     * Busca series por rango de fechas de estreno
-     * @param fechaInicio Fecha de inicio del rango
-     * @param fechaFin Fecha de fin del rango
-     * @return Lista de series estrenadas en el rango
-     */
-    List<Serie> findByFechaEstrenoBetween(LocalDate fechaInicio, LocalDate fechaFin);
-
-    /**
-     * Busca serie por título exacto
-     * @param titulo Título exacto de la serie
-     * @return Optional con la serie si existe
-     */
-    Optional<Serie> findByTituloIgnoreCase(String titulo);
-
-    /**
      * Verifica si existe una serie con el título dado
      * @param titulo Título de la serie
      * @return true si existe, false si no
@@ -62,12 +46,7 @@ public interface SerieRepository extends JpaRepository<Serie, Long> {
      */
     @Query("SELECT s FROM Serie s LEFT JOIN FETCH s.personajes")
     List<Serie> findAllWithPersonajes();
-
-    /**
-     * Query para obtener series por año de estreno
-     * @param year Año de estreno
-     * @return Lista de series del año especificado
-     */
-    @Query("SELECT s FROM Serie s WHERE YEAR(s.fechaEstreno) = :year")
-    List<Serie> findByYear(@Param("year") int year);
+    
+    @Query("SELECT s FROM Serie s LEFT JOIN FETCH s.personajes WHERE s.id = :id")
+    Optional<Serie> findByIdWithPersonajes(@Param("id") Long id);
 }
