@@ -22,8 +22,8 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
-@ToString
-@EqualsAndHashCode
+@ToString(exclude = "personajes")
+@EqualsAndHashCode(exclude = "personajes")
 public class Serie {
 
     public Serie(String titulo, String genero, LocalDate fechaEstreno) {
@@ -50,7 +50,7 @@ public class Serie {
     @Column(name = "fecha_estreno", nullable = false)
     private LocalDate fechaEstreno;
 
-    @OneToMany(mappedBy = "serie", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "serie", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JsonManagedReference
     private List<Personaje> personajes = new ArrayList<>();
 

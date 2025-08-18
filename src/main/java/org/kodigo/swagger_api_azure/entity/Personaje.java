@@ -13,12 +13,12 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 
 @Entity
-@Table(name = "Personaje")
+@Table(name = "personaje")
 @Getter
 @Setter
 @AllArgsConstructor
-@ToString
-@EqualsAndHashCode
+@ToString(exclude = "serie")
+@EqualsAndHashCode(exclude = "serie")
 public class Personaje {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -34,9 +34,9 @@ public class Personaje {
     private String descripcion;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "serie_id", nullable = false)
-    @JsonBackReference
+    @JoinColumn(name = "serie_id")
     private Serie serie;
+
 
     // Constructores
     public Personaje() {}
