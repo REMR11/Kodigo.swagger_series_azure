@@ -75,14 +75,30 @@ public class PersonajeService {
      * @throws RuntimeException si la serie no existe o si ya existe un personaje con el mismo nombre en la serie
      */
     public PersonajeDTO create(PersonajeDTO personajeDto) {
+        // Si no viene serieId, permitir crear personaje sin serie
+        if (personajeDto.getSerieId() == null) {
+            Personaje personaje = personajeMapper.toEntity(personajeDto);
+            personaje.setSerie(null);
+            Personaje saved = personajeRepository.save(personaje);
+            return personajeMapper.toDto(saved);
+        }
+
+        // Con serieId: validar y asociar
         validateSerieExists(personajeDto.getSerieId());
         validateUniquePersonajeInSerie(personajeDto.getNombre(), personajeDto.getSerieId());
 
-        Serie serie = serieRepository.getReferenceById(personajeDto.getSerieId());
+        Serie serie = serieRepository.findById(personajeDto.getSerieId())
+                .orElseThrow(() -> new RuntimeException("Serie no encontrada con ID: " + personajeDto.getSerieId()));
+        
         Personaje personaje = personajeMapper.toEntity(personajeDto);
         personaje.setSerie(serie);
 
         Personaje savedPersonaje = personajeRepository.save(personaje);
+        
+        // Actualizar la lista de personajes en la serie (solo si corresponde)
+        serie.getPersonajes().add(savedPersonaje);
+        serieRepository.save(serie);
+        
         return personajeMapper.toDto(savedPersonaje);
     }
 
@@ -96,7 +112,9 @@ public class PersonajeService {
         validateSerieExists(serieId);
         validateUniquePersonajeInSerie(createPersonajeDto.getNombre(), serieId);
 
-        Serie serie = serieRepository.getReferenceById(serieId);
+        Serie serie = serieRepository.findById(serieId)
+                .orElseThrow(() -> new RuntimeException("Serie no encontrada con ID: " + serieId));
+        
         Personaje personaje = new Personaje(
                 createPersonajeDto.getNombre(),
                 createPersonajeDto.getDescripcion(),
@@ -104,6 +122,11 @@ public class PersonajeService {
         );
 
         Personaje savedPersonaje = personajeRepository.save(personaje);
+        
+        // Actualizar la lista de personajes en la serie
+        serie.getPersonajes().add(savedPersonaje);
+        serieRepository.save(serie);
+        
         return personajeMapper.toDto(savedPersonaje);
     }
 
@@ -118,20 +141,54 @@ public class PersonajeService {
         Personaje existingPersonaje = personajeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Personaje no encontrado con ID: " + id));
 
+        // Si el nuevo destino no tiene serie, desasociar si aplica
+        if (personajeDto.getSerieId() == null) {
+            // Validar nombre único solo dentro de la misma serie si permaneciera en una
+            existingPersonaje.setNombre(personajeDto.getNombre());
+            existingPersonaje.setDescripcion(personajeDto.getDescripcion());
+
+            if (existingPersonaje.getSerie() != null) {
+                Serie serieAnterior = existingPersonaje.getSerie();
+                serieAnterior.getPersonajes().remove(existingPersonaje);
+                existingPersonaje.setSerie(null);
+                serieRepository.save(serieAnterior);
+            }
+
+            Personaje saved = personajeRepository.save(existingPersonaje);
+            return personajeMapper.toDto(saved);
+        }
+
+        // Con serie: validar y actualizar
         validateSerieExists(personajeDto.getSerieId());
 
-        // Validar nombre único solo si ha cambiado el nombre o la serie
+        // Validar nombre único si cambia nombre o serie
         if (!existingPersonaje.getNombre().equalsIgnoreCase(personajeDto.getNombre()) ||
-                !existingPersonaje.getSerie().getId().equals(personajeDto.getSerieId())) {
+                (existingPersonaje.getSerie() == null || !existingPersonaje.getSerie().getId().equals(personajeDto.getSerieId()))) {
             validateUniquePersonajeInSerie(personajeDto.getNombre(), personajeDto.getSerieId());
         }
 
-        Serie serie = serieRepository.getReferenceById(personajeDto.getSerieId());
+        Serie nuevaSerie = serieRepository.findById(personajeDto.getSerieId())
+                .orElseThrow(() -> new RuntimeException("Serie no encontrada con ID: " + personajeDto.getSerieId()));
+        
+        // Remover de la serie anterior si es diferente
+        if (existingPersonaje.getSerie() != null && !existingPersonaje.getSerie().getId().equals(personajeDto.getSerieId())) {
+            Serie serieAnterior = existingPersonaje.getSerie();
+            serieAnterior.getPersonajes().remove(existingPersonaje);
+            serieRepository.save(serieAnterior);
+        }
+        
         existingPersonaje.setNombre(personajeDto.getNombre());
         existingPersonaje.setDescripcion(personajeDto.getDescripcion());
-        existingPersonaje.setSerie(serie);
+        existingPersonaje.setSerie(nuevaSerie);
 
         Personaje updatedPersonaje = personajeRepository.save(existingPersonaje);
+        
+        // Agregar a la nueva serie
+        if (nuevaSerie.getPersonajes().stream().noneMatch(p -> p.getId().equals(updatedPersonaje.getId()))) {
+            nuevaSerie.getPersonajes().add(updatedPersonaje);
+        }
+        serieRepository.save(nuevaSerie);
+        
         return personajeMapper.toDto(updatedPersonaje);
     }
 
@@ -141,9 +198,16 @@ public class PersonajeService {
      * @throws RuntimeException si el personaje no existe
      */
     public void deleteById(Long id) {
-        if (!personajeRepository.existsById(id)) {
-            throw new RuntimeException("Personaje no encontrado con ID: " + id);
+        Personaje personaje = personajeRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Personaje no encontrado con ID: " + id));
+        
+        // Remover de la serie si aplica
+        Serie serie = personaje.getSerie();
+        if (serie != null) {
+            serie.getPersonajes().remove(personaje);
+            serieRepository.save(serie);
         }
+        
         personajeRepository.deleteById(id);
     }
 

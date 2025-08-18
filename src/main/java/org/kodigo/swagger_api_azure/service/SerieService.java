@@ -8,13 +8,17 @@
 package org.kodigo.swagger_api_azure.service;
 
 import jakarta.transaction.Transactional;
+import org.kodigo.swagger_api_azure.dto.PersonajeDTO;
 import org.kodigo.swagger_api_azure.dto.SerieDTO;
+import org.kodigo.swagger_api_azure.entity.Personaje;
 import org.kodigo.swagger_api_azure.entity.Serie;
+import org.kodigo.swagger_api_azure.repository.PersonajeRepository;
 import org.kodigo.swagger_api_azure.repository.SerieRepository;
 import org.kodigo.swagger_api_azure.service.mapper.SerieMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -24,11 +28,13 @@ import java.util.stream.Collectors;
 public class SerieService {
     private final SerieRepository serieRepository;
     private final SerieMapper serieMapper;
+    private final PersonajeRepository personajeRepository;
 
     @Autowired
-    public SerieService(SerieRepository serieRepository, SerieMapper serieMapper) {
+    public SerieService(SerieRepository serieRepository, SerieMapper serieMapper, PersonajeRepository personajeRepository) {
         this.serieRepository = serieRepository;
         this.serieMapper = serieMapper;
+        this.personajeRepository = personajeRepository;
     }
 
     /**
@@ -37,7 +43,7 @@ public class SerieService {
      */
     @Transactional
     public List<SerieDTO> findAll() {
-        return serieRepository.findAll()
+        return serieRepository.findAllWithPersonajes()
                 .stream()
                 .map(serieMapper::toDto)
                 .collect(Collectors.toList());
@@ -50,7 +56,7 @@ public class SerieService {
      */
     @Transactional
     public Optional<SerieDTO> findById(Long id) {
-        return serieRepository.findById(id)
+        return serieRepository.findByIdWithPersonajes(id)
                 .map(serieMapper::toDto);
     }
 
@@ -61,9 +67,15 @@ public class SerieService {
      * @throws IllegalArgumentException si ya existe una serie con el mismo título
      */
     public SerieDTO create(SerieDTO serieDto) {
-        validateSerieTitle(serieDto.getTitulo());
+        if (serieDto.getId() != null && serieDto.getId() > 0) {
+            throw new IllegalArgumentException("El ID debe ser null para crear una nueva serie");
+        }
 
         Serie serie = serieMapper.toEntity(serieDto);
+        serie.setId(null);
+
+        managePersonajes(serie, serieDto);
+
         Serie savedSerie = serieRepository.save(serie);
         return serieMapper.toDto(savedSerie);
     }
@@ -79,7 +91,6 @@ public class SerieService {
         Serie existingSerie = serieRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Serie no encontrada con ID: " + id));
 
-        // Validar título solo si ha cambiado
         if (!existingSerie.getTitulo().equalsIgnoreCase(serieDto.getTitulo())) {
             validateSerieTitle(serieDto.getTitulo());
         }
@@ -87,6 +98,8 @@ public class SerieService {
         existingSerie.setTitulo(serieDto.getTitulo());
         existingSerie.setGenero(serieDto.getGenero());
         existingSerie.setFechaEstreno(serieDto.getFechaEstreno());
+
+        managePersonajes(existingSerie, serieDto);
 
         Serie updatedSerie = serieRepository.save(existingSerie);
         return serieMapper.toDto(updatedSerie);
@@ -128,6 +141,38 @@ public class SerieService {
                 .stream()
                 .map(serieMapper::toDto)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Sincroniza la lista de personajes de una serie a partir del DTO
+     */
+    private void managePersonajes(Serie serie, SerieDTO serieDto) {
+        List<Personaje> personajesGestionados = new ArrayList<>();
+
+        if (serieDto.getPersonajes() != null && !serieDto.getPersonajes().isEmpty()) {
+            for (PersonajeDTO personajeDto : serieDto.getPersonajes()) {
+                if (personajeDto.getId() != null && personajeDto.getId() > 0) {
+                    Personaje personajeExistente = personajeRepository.findById(personajeDto.getId())
+                            .orElseThrow(() -> new RuntimeException("Personaje con ID " + personajeDto.getId() + " no encontrado"));
+
+                    personajeExistente.setNombre(personajeDto.getNombre());
+                    personajeExistente.setDescripcion(personajeDto.getDescripcion());
+                    personajeExistente.setSerie(serie);
+
+                    personajesGestionados.add(personajeExistente);
+                } else {
+                    Personaje nuevo = new Personaje();
+                    nuevo.setNombre(personajeDto.getNombre());
+                    nuevo.setDescripcion(personajeDto.getDescripcion());
+                    nuevo.setSerie(serie);
+
+                    personajesGestionados.add(nuevo);
+                }
+            }
+        }
+
+        serie.getPersonajes().clear();
+        serie.getPersonajes().addAll(personajesGestionados);
     }
 
     /**
