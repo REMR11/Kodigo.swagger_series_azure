@@ -5,7 +5,6 @@
 package org.kodigo.swagger_api_azure.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,7 +38,6 @@ public class PersonajeDTO {
     @Size(max = 500, message = "La descripción no puede exceder 500 caracteres")
     private String descripcion;
 
-    @NotNull(message = "El ID de la serie es obligatorio")
     private Long serieId;
 
     private String serieTitulo;
