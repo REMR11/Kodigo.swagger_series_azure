@@ -10,6 +10,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.kodigo.swagger_api_azure.dto.SerieDTO;
 import org.kodigo.swagger_api_azure.service.SerieService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +28,7 @@ import java.util.Optional;
 @Tag(name = "Series", description = "API para gestión de series")
 @Validated
 @CrossOrigin(origins = "*")
+@Slf4j // ✅ Agregado para logging
 public class SerieController {
 
     private final SerieService serieService;
@@ -45,8 +48,13 @@ public class SerieController {
             @ApiResponse(responseCode = "500", description = "Error interno del servidor")
     })
     public ResponseEntity<List<SerieDTO>> getAllSeries() {
-        List<SerieDTO> series = serieService.findAll();
-        return ResponseEntity.ok(series);
+        try {
+            List<SerieDTO> series = serieService.findAll();
+            return ResponseEntity.ok(series);
+        } catch (Exception e) {
+            log.error("Error al obtener todas las series", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/{id}")
@@ -64,9 +72,14 @@ public class SerieController {
             @Parameter(description = "ID de la serie", required = true)
             @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id) {
 
-        Optional<SerieDTO> serie = serieService.findById(id);
-        return serie.map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            Optional<SerieDTO> serie = serieService.findById(id);
+            return serie.map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            log.error("Error al obtener serie por ID: {}", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/search/titulo")
@@ -83,8 +96,13 @@ public class SerieController {
             @Parameter(description = "Título o parte del título de la serie", required = true)
             @RequestParam @NotBlank(message = "El título no puede estar vacío") String titulo) {
 
-        List<SerieDTO> series = serieService.findByTitulo(titulo);
-        return ResponseEntity.ok(series);
+        try {
+            List<SerieDTO> series = serieService.findByTitulo(titulo);
+            return ResponseEntity.ok(series);
+        } catch (Exception e) {
+            log.error("Error al buscar series por título: {}", titulo, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/search/genero")
@@ -101,8 +119,13 @@ public class SerieController {
             @Parameter(description = "Género de la serie", required = true)
             @RequestParam @NotBlank(message = "El género no puede estar vacío") String genero) {
 
-        List<SerieDTO> series = serieService.findByGenero(genero);
-        return ResponseEntity.ok(series);
+        try {
+            List<SerieDTO> series = serieService.findByGenero(genero);
+            return ResponseEntity.ok(series);
+        } catch (Exception e) {
+            log.error("Error al buscar series por género: {}", genero, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @PostMapping
@@ -121,12 +144,50 @@ public class SerieController {
             @Valid @RequestBody SerieDTO serieDto) {
 
         try {
+            log.info("Intentando crear serie: {}", serieDto.getTitulo());
+            log.info("ID del DTO recibido: {}", serieDto.getId());
+
+            // IMPORTANTE: Asegurar que el ID sea null para nuevas entidades
+            if (serieDto.getId() != null && serieDto.getId() <= 0) {
+                serieDto.setId(null);
+                log.info("ID reseteado a null para nueva serie");
+            }
+
             SerieDTO createdSerie = serieService.create(serieDto);
+            log.info("Serie creada exitosamente con ID: {}", createdSerie.getId());
             return ResponseEntity.status(HttpStatus.CREATED).body(createdSerie);
+
         } catch (IllegalArgumentException e) {
+            log.warn("Conflicto al crear serie - Ya existe: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
-        } catch (Exception e) {
+
+        } catch (org.springframework.dao.InvalidDataAccessApiUsageException e) {
+            log.error("Error de acceso a datos inválido al crear serie: {}", e.getMessage());
+            if (e.getMessage() != null && e.getMessage().contains("detached entity passed to persist")) {
+                log.error("Problema: Intentando persistir entidades relacionadas con ID. Verifica que los personajes no tengan ID para crear una serie nueva.");
+            }
             return ResponseEntity.badRequest().build();
+
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+            log.error("Error de concurrencia optimista al crear serie: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.error("Violación de integridad de datos: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+
+        } catch (RuntimeException e) {
+            log.error("Error de runtime al crear serie", e);
+            // Verificar si es un error específico
+            String message = e.getMessage();
+            if (message != null && message.toLowerCase().contains("not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().build();
+
+        } catch (Exception e) {
+            log.error("Error inesperado al crear serie", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -149,16 +210,24 @@ public class SerieController {
             @Valid @RequestBody SerieDTO serieDto) {
 
         try {
+            log.info("Intentando actualizar serie con ID: {}", id);
             SerieDTO updatedSerie = serieService.update(id, serieDto);
             return ResponseEntity.ok(updatedSerie);
+
         } catch (IllegalArgumentException e) {
+            log.warn("Conflicto al actualizar serie: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.CONFLICT).build();
+
         } catch (RuntimeException e) {
+            log.error("Error al actualizar serie con ID: {}", id, e);
             String message = e.getMessage();
             if (message != null && message.contains("no encontrada")) {
                 return ResponseEntity.notFound().build();
             }
             return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Error inesperado al actualizar serie", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
@@ -177,9 +246,12 @@ public class SerieController {
             @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id) {
 
         try {
+            log.info("Intentando eliminar serie con ID: {}", id);
             serieService.deleteById(id);
             return ResponseEntity.noContent().build();
+
         } catch (RuntimeException e) {
+            log.error("Error al eliminar serie con ID: {}", id, e);
             String message = e.getMessage();
             if (message != null && message.contains("no encontrada")) {
                 return ResponseEntity.notFound().build();
@@ -189,10 +261,12 @@ public class SerieController {
                 return ResponseEntity.status(HttpStatus.CONFLICT).build();
             }
             return ResponseEntity.badRequest().build();
+        } catch (Exception e) {
+            log.error("Error inesperado al eliminar serie", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
-    // Endpoint adicional para obtener estadísticas básicas
     @GetMapping("/stats")
     @Operation(summary = "Obtener estadísticas de series",
             description = "Retorna estadísticas básicas sobre las series")
@@ -201,19 +275,24 @@ public class SerieController {
             @ApiResponse(responseCode = "500", description = "Error interno del servidor")
     })
     public ResponseEntity<SerieStatsResponse> getSerieStats() {
-        List<SerieDTO> allSeries = serieService.findAll();
+        try {
+            List<SerieDTO> allSeries = serieService.findAll();
 
-        long totalSeries = allSeries.size();
-        long uniqueGenres = allSeries.stream()
-                .map(SerieDTO::getGenero)
-                .distinct()
-                .count();
+            long totalSeries = allSeries.size();
+            long uniqueGenres = allSeries.stream()
+                    .map(SerieDTO::getGenero)
+                    .distinct()
+                    .count();
 
-        SerieStatsResponse stats = new SerieStatsResponse(totalSeries, uniqueGenres);
-        return ResponseEntity.ok(stats);
+            SerieStatsResponse stats = new SerieStatsResponse(totalSeries, uniqueGenres);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("Error al obtener estadísticas de series", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
-    // Clase interna para la respuesta de estadísticas
+    @Getter
     public static class SerieStatsResponse {
         private final long totalSeries;
         private final long uniqueGenres;
@@ -221,14 +300,6 @@ public class SerieController {
         public SerieStatsResponse(long totalSeries, long uniqueGenres) {
             this.totalSeries = totalSeries;
             this.uniqueGenres = uniqueGenres;
-        }
-
-        public long getTotalSeries() {
-            return totalSeries;
-        }
-
-        public long getUniqueGenres() {
-            return uniqueGenres;
         }
     }
 }
