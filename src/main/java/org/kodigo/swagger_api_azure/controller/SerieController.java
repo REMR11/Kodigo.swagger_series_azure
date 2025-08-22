@@ -15,20 +15,24 @@ import lombok.extern.slf4j.Slf4j;
 import org.kodigo.swagger_api_azure.dto.SerieDTO;
 import org.kodigo.swagger_api_azure.service.SerieService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 @RestController
 @RequestMapping("/api/v1/series")
 @Tag(name = "Series", description = "API para gestión de series")
 @Validated
 @CrossOrigin(origins = "*")
-@Slf4j // ✅ Agregado para logging
+@Slf4j
 public class SerieController {
 
     private final SerieService serieService;
@@ -48,13 +52,13 @@ public class SerieController {
             @ApiResponse(responseCode = "500", description = "Error interno del servidor")
     })
     public ResponseEntity<List<SerieDTO>> getAllSeries() {
-        try {
-            List<SerieDTO> series = serieService.findAll();
-            return ResponseEntity.ok(series);
-        } catch (Exception e) {
-            log.error("Error al obtener todas las series", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeWithExceptionHandling(
+                () -> {
+                    List<SerieDTO> series = serieService.findAll();
+                    return ResponseEntity.ok(series);
+                },
+                "Error al obtener todas las series"
+        );
     }
 
     @GetMapping("/{id}")
@@ -72,14 +76,14 @@ public class SerieController {
             @Parameter(description = "ID de la serie", required = true)
             @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id) {
 
-        try {
-            Optional<SerieDTO> serie = serieService.findById(id);
-            return serie.map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
-        } catch (Exception e) {
-            log.error("Error al obtener serie por ID: {}", id, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeWithExceptionHandling(
+                () -> {
+                    Optional<SerieDTO> serie = serieService.findById(id);
+                    return serie.map(ResponseEntity::ok)
+                            .orElse(ResponseEntity.notFound().build());
+                },
+                String.format("Error al obtener serie por ID: %d", id)
+        );
     }
 
     @GetMapping("/search/titulo")
@@ -96,13 +100,13 @@ public class SerieController {
             @Parameter(description = "Título o parte del título de la serie", required = true)
             @RequestParam @NotBlank(message = "El título no puede estar vacío") String titulo) {
 
-        try {
-            List<SerieDTO> series = serieService.findByTitulo(titulo);
-            return ResponseEntity.ok(series);
-        } catch (Exception e) {
-            log.error("Error al buscar series por título: {}", titulo, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeWithExceptionHandling(
+                () -> {
+                    List<SerieDTO> series = serieService.findByTitulo(titulo);
+                    return ResponseEntity.ok(series);
+                },
+                String.format("Error al buscar series por título: %s", titulo)
+        );
     }
 
     @GetMapping("/search/genero")
@@ -119,13 +123,13 @@ public class SerieController {
             @Parameter(description = "Género de la serie", required = true)
             @RequestParam @NotBlank(message = "El género no puede estar vacío") String genero) {
 
-        try {
-            List<SerieDTO> series = serieService.findByGenero(genero);
-            return ResponseEntity.ok(series);
-        } catch (Exception e) {
-            log.error("Error al buscar series por género: {}", genero, e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeWithExceptionHandling(
+                () -> {
+                    List<SerieDTO> series = serieService.findByGenero(genero);
+                    return ResponseEntity.ok(series);
+                },
+                String.format("Error al buscar series por género: %s", genero)
+        );
     }
 
     @PostMapping
@@ -143,52 +147,7 @@ public class SerieController {
             @Parameter(description = "Datos de la serie a crear", required = true)
             @Valid @RequestBody SerieDTO serieDto) {
 
-        try {
-            log.info("Intentando crear serie: {}", serieDto.getTitulo());
-            log.info("ID del DTO recibido: {}", serieDto.getId());
-
-            // IMPORTANTE: Asegurar que el ID sea null para nuevas entidades
-            if (serieDto.getId() != null && serieDto.getId() <= 0) {
-                serieDto.setId(null);
-                log.info("ID reseteado a null para nueva serie");
-            }
-
-            SerieDTO createdSerie = serieService.create(serieDto);
-            log.info("Serie creada exitosamente con ID: {}", createdSerie.getId());
-            return ResponseEntity.status(HttpStatus.CREATED).body(createdSerie);
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Conflicto al crear serie - Ya existe: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
-
-        } catch (org.springframework.dao.InvalidDataAccessApiUsageException e) {
-            log.error("Error de acceso a datos inválido al crear serie: {}", e.getMessage());
-            if (e.getMessage() != null && e.getMessage().contains("detached entity passed to persist")) {
-                log.error("Problema: Intentando persistir entidades relacionadas con ID. Verifica que los personajes no tengan ID para crear una serie nueva.");
-            }
-            return ResponseEntity.badRequest().build();
-
-        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
-            log.error("Error de concurrencia optimista al crear serie: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
-
-        } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            log.error("Violación de integridad de datos: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
-
-        } catch (RuntimeException e) {
-            log.error("Error de runtime al crear serie", e);
-            // Verificar si es un error específico
-            String message = e.getMessage();
-            if (message != null && message.toLowerCase().contains("not found")) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.badRequest().build();
-
-        } catch (Exception e) {
-            log.error("Error inesperado al crear serie", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeCreateOperation(serieDto);
     }
 
     @PutMapping("/{id}")
@@ -209,26 +168,7 @@ public class SerieController {
             @Parameter(description = "Nuevos datos de la serie", required = true)
             @Valid @RequestBody SerieDTO serieDto) {
 
-        try {
-            log.info("Intentando actualizar serie con ID: {}", id);
-            SerieDTO updatedSerie = serieService.update(id, serieDto);
-            return ResponseEntity.ok(updatedSerie);
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Conflicto al actualizar serie: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.CONFLICT).build();
-
-        } catch (RuntimeException e) {
-            log.error("Error al actualizar serie con ID: {}", id, e);
-            String message = e.getMessage();
-            if (message != null && message.contains("no encontrada")) {
-                return ResponseEntity.notFound().build();
-            }
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Error inesperado al actualizar serie", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeUpdateOperation(id, serieDto);
     }
 
     @DeleteMapping("/{id}")
@@ -245,26 +185,7 @@ public class SerieController {
             @Parameter(description = "ID de la serie a eliminar", required = true)
             @PathVariable @Min(value = 1, message = "El ID debe ser mayor a 0") Long id) {
 
-        try {
-            log.info("Intentando eliminar serie con ID: {}", id);
-            serieService.deleteById(id);
-            return ResponseEntity.noContent().build();
-
-        } catch (RuntimeException e) {
-            log.error("Error al eliminar serie con ID: {}", id, e);
-            String message = e.getMessage();
-            if (message != null && message.contains("no encontrada")) {
-                return ResponseEntity.notFound().build();
-            }
-            // Si hay una restricción de integridad referencial (personajes asociados)
-            if (message != null && (message.contains("constraint") || message.contains("referential"))) {
-                return ResponseEntity.status(HttpStatus.CONFLICT).build();
-            }
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("Error inesperado al eliminar serie", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        return executeDeleteOperation(id);
     }
 
     @GetMapping("/stats")
@@ -275,19 +196,157 @@ public class SerieController {
             @ApiResponse(responseCode = "500", description = "Error interno del servidor")
     })
     public ResponseEntity<SerieStatsResponse> getSerieStats() {
+        return executeWithExceptionHandling(
+                () -> {
+                    List<SerieDTO> allSeries = serieService.findAll();
+                    SerieStatsResponse stats = buildSerieStats(allSeries);
+                    return ResponseEntity.ok(stats);
+                },
+                "Error al obtener estadísticas de series"
+        );
+    }
+
+    // Métodos privados para operaciones específicas
+
+    private ResponseEntity<SerieDTO> executeCreateOperation(SerieDTO serieDto) {
         try {
-            List<SerieDTO> allSeries = serieService.findAll();
+            log.info("Intentando crear serie: {}", serieDto.getTitulo());
+            log.info("ID del DTO recibido: {}", serieDto.getId());
 
-            long totalSeries = allSeries.size();
-            long uniqueGenres = allSeries.stream()
-                    .map(SerieDTO::getGenero)
-                    .distinct()
-                    .count();
+            preprocessSerieForCreation(serieDto);
+            SerieDTO createdSerie = serieService.create(serieDto);
 
-            SerieStatsResponse stats = new SerieStatsResponse(totalSeries, uniqueGenres);
-            return ResponseEntity.ok(stats);
+            log.info("Serie creada exitosamente con ID: {}", createdSerie.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(createdSerie);
+
+        } catch (IllegalArgumentException e) {
+            return handleConflictException(e, "Conflicto al crear serie");
+        } catch (InvalidDataAccessApiUsageException e) {
+            return handleDataAccessException(e);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            return handleOptimisticLockingException(e);
+        } catch (DataIntegrityViolationException e) {
+            return handleDataIntegrityException(e);
+        } catch (RuntimeException e) {
+            return handleRuntimeException(e, "Error de runtime al crear serie");
         } catch (Exception e) {
-            log.error("Error al obtener estadísticas de series", e);
+            log.error("Error inesperado al crear serie", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private ResponseEntity<SerieDTO> executeUpdateOperation(Long id, SerieDTO serieDto) {
+        try {
+            log.info("Intentando actualizar serie con ID: {}", id);
+            SerieDTO updatedSerie = serieService.update(id, serieDto);
+            return ResponseEntity.ok(updatedSerie);
+
+        } catch (IllegalArgumentException e) {
+            return handleConflictException(e, "Conflicto al actualizar serie");
+        } catch (RuntimeException e) {
+            return handleRuntimeException(e, String.format("Error al actualizar serie con ID: %d", id));
+        } catch (Exception e) {
+            log.error("Error inesperado al actualizar serie", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    private ResponseEntity<Void> executeDeleteOperation(Long id) {
+        try {
+            log.info("Intentando eliminar serie con ID: {}", id);
+            serieService.deleteById(id);
+            return ResponseEntity.noContent().build();
+
+        } catch (RuntimeException e) {
+            log.error("Error al eliminar serie con ID: {}", id, e);
+            String message = e.getMessage();
+
+            if (isNotFoundException(message)) {
+                return ResponseEntity.notFound().build();
+            }
+            if (isConstraintViolation(message)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT).build();
+            }
+            return ResponseEntity.badRequest().build();
+
+        } catch (Exception e) {
+            log.error("Error inesperado al eliminar serie", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    // Métodos utilitarios
+
+    private void preprocessSerieForCreation(SerieDTO serieDto) {
+        if (serieDto.getId() != null && serieDto.getId() <= 0) {
+            serieDto.setId(null);
+            log.info("ID reseteado a null para nueva serie");
+        }
+    }
+
+    private SerieStatsResponse buildSerieStats(List<SerieDTO> allSeries) {
+        long totalSeries = allSeries.size();
+        long uniqueGenres = allSeries.stream()
+                .map(SerieDTO::getGenero)
+                .distinct()
+                .count();
+
+        return new SerieStatsResponse(totalSeries, uniqueGenres);
+    }
+
+    // Métodos para manejo de excepciones específicas
+
+    private ResponseEntity<SerieDTO> handleConflictException(IllegalArgumentException e, String logMessage) {
+        log.warn("{} - Ya existe: {}", logMessage, e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).build();
+    }
+
+    private ResponseEntity<SerieDTO> handleDataAccessException(InvalidDataAccessApiUsageException e) {
+        log.error("Error de acceso a datos inválido al crear serie: {}", e.getMessage());
+        if (e.getMessage() != null && e.getMessage().contains("detached entity passed to persist")) {
+            log.error("Problema: Intentando persistir entidades relacionadas con ID. Verifica que los personajes no tengan ID para crear una serie nueva.");
+        }
+        return ResponseEntity.badRequest().build();
+    }
+
+    private ResponseEntity<SerieDTO> handleOptimisticLockingException(ObjectOptimisticLockingFailureException e) {
+        log.error("Error de concurrencia optimista al crear serie: {}", e.getMessage());
+        return ResponseEntity.badRequest().build();
+    }
+
+    private ResponseEntity<SerieDTO> handleDataIntegrityException(DataIntegrityViolationException e) {
+        log.error("Violación de integridad de datos: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).build();
+    }
+
+    private ResponseEntity<SerieDTO> handleRuntimeException(RuntimeException e, String logMessage) {
+        log.error(logMessage, e);
+        String message = e.getMessage();
+        if (isNotFoundException(message)) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.badRequest().build();
+    }
+
+    // Métodos de utilidad para validación de mensajes
+
+    private boolean isNotFoundException(String message) {
+        return message != null && message.toLowerCase().contains("no encontrada");
+    }
+
+    private boolean isConstraintViolation(String message) {
+        return message != null && (message.contains("constraint") || message.contains("referential"));
+    }
+
+    // Método genérico para manejo de excepciones en operaciones simples
+
+    private <T> ResponseEntity<T> executeWithExceptionHandling(
+            Supplier<ResponseEntity<T>> operation,
+            String errorMessage) {
+        try {
+            return operation.get();
+        } catch (Exception e) {
+            log.error(errorMessage, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
