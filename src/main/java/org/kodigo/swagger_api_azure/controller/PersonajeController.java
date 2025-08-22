@@ -26,7 +26,7 @@ import java.util.Optional;
 @RequestMapping("/api/v1/personajes")
 @Tag(name = "Personajes", description = "API para gestión de personajes")
 @Validated
-@CrossOrigin(origins = "*")
+//@CrossOrigin(origins = "*")
 public class PersonajeController {
 
     private final PersonajeService personajeService;
